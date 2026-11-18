@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 DB_PATH = Path(__file__).parent / "sample.db"
 
@@ -98,8 +98,8 @@ class DeviceIn(BaseModel):
 
 class LocationIn(BaseModel):
     device_id: str
-    latitude: float
-    longitude: float
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
 
 
 class LinkIn(BaseModel):
@@ -166,8 +166,25 @@ def post_location(body: LocationIn, user=Depends(current_user)):
 
 @app.post("/api/v1/links")
 def request_link(body: LinkIn, user=Depends(current_user)):
-    link_id = str(uuid.uuid4())
+    if body.user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="cannot link to yourself")
     conn = get_db()
+    target = conn.execute("SELECT id FROM users WHERE id = ?", (body.user_id,)).fetchone()
+    if target is None:
+        conn.close()
+        raise HTTPException(status_code=404, detail="user not found")
+    dup = conn.execute(
+        """
+        SELECT id FROM links
+        WHERE status IN ('pending', 'approved')
+          AND ((requester_id = ? AND approver_id = ?) OR (requester_id = ? AND approver_id = ?))
+        """,
+        (user["id"], body.user_id, body.user_id, user["id"]),
+    ).fetchone()
+    if dup is not None:
+        conn.close()
+        raise HTTPException(status_code=409, detail="link already exists")
+    link_id = str(uuid.uuid4())
     conn.execute(
         "INSERT INTO links (id, requester_id, approver_id) VALUES (?, ?, ?)",
         (link_id, user["id"], body.user_id),

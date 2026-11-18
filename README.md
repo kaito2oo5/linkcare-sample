@@ -37,6 +37,12 @@ uvicorn main:app --reload
 
 起動後、http://127.0.0.1:8000/docs でAPIドキュメント（Swagger UI）が確認できます。
 
+## テスト
+
+```bash
+pytest -q
+```
+
 ## 備考
 
 - サンプル内のデータはすべて架空のものです。

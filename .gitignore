@@ -1,2 +1,4 @@
-sample.db
 __pycache__/
+*.pyc
+sample.db
+.pytest_cache/
